@@ -4,36 +4,31 @@ import authService from "../services/auth.service";
 import { useNavigate } from "react-router-dom";
 
 const Private = () => {
-    const {store, dispatch} = useGlobalReducer();
-    const navigate = useNavigate()
-    
-    useEffect(()=>{
-        if (localStorage.getItem('token') && !store.user) {
-            authService.getMe().then(data => dispatch({
-            type: 'auth',
-            payload: {
-                user: data.data
-            }
-        }))
+    const { store, dispatch } = useGlobalReducer();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (!sessionStorage.getItem('token')) {
+            navigate('/login'); // sin token -> fuera
+            return;
         }
-        if (!localStorage.getItem('token')) navigate('/') 
-    },[store.auth])
+        if (!store.user) {
+            authService.getMe().then(data => {
+                if (data) dispatch({ type: 'auth', payload: { user: data.data } });
+                else { // token inválido o expirado
+                    authService.logout();
+                    navigate('/login');
+                }
+            });
+        }
+    }, []);
 
-const handleLogout = () => {
-    authService.logout()
-    dispatch({
-        type: "logout"
-    })
-}
     return (
-        <div>
-            ... so private ...
-            <h1>Welcome {store.user?.email}</h1>
-
-            <button onClick={handleLogout}>logout</button>
-
+        <div className="container text-center mt-5">
+            <h1>Bienvenido {store.user?.email}</h1>
+            <p>... so private ...</p>
         </div>
-    )
+    );
 }
 
 export default Private

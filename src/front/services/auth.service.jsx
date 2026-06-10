@@ -10,35 +10,42 @@ authService.auth = async (formData) => {
             },
             body: JSON.stringify(formData)
         })
-        if (!resp.ok) throw new Error('error auth')
+        // leemos el JSON SIEMPRE (ok o no ok) para no perder el mensaje del backend
         const data = await resp.json()
-    if (data.token) localStorage.setItem('token', data.token)
+
+        if (data.token) sessionStorage.setItem('token', data.token)
+
         return data
+
     } catch (error) {
+        // aqui solo caen errores de red (backend caido, sin internet...)
         console.log(error)
+        return { success: false, data: "No se pudo conectar con el servidor" }
     }
 }
 
 authService.getMe = async () => {
-     try {
+    try {
         const resp = await fetch(url + '/api/me', {
             method: "GET",
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + localStorage.getItem('token') // si tiene la ruta @jwt_required() SE ENVIA AUTHORIZATION CON BEARER TOKEN
-            }, 
+                'Authorization': 'Bearer ' + sessionStorage.getItem('token') // si la ruta tiene @jwt_required() SE ENVIA AUTHORIZATION CON BEARER TOKEN
+            },
         })
-        if (!resp.ok) throw new Error('error auth')
+        if (!resp.ok) return null // token invalido o expirado
+
         const data = await resp.json()
         return data
+
     } catch (error) {
         console.log(error)
+        return null
     }
 }
 
-
 authService.logout = () => {
-    localStorage.removeItem('token')
+    sessionStorage.removeItem('token')
 }
 
 export default authService
