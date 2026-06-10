@@ -1,6 +1,8 @@
 export const initialStore=()=>{
   return{
     message: null,
+    auth: false,
+    user: null,
     todos: [
       {
         id: 1,
@@ -18,6 +20,12 @@ export const initialStore=()=>{
 
 export default function storeReducer(store, action = {}) {
   switch(action.type){
+     case 'auth':
+      return {
+        ...store,
+        auth: true,
+        user: action.payload.user
+      }
     case 'set_hello':
       return {
         ...store,

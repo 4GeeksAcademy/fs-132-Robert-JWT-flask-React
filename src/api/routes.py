@@ -6,7 +6,8 @@ from api.models import db, User
 from api.utils import generate_sitemap, APIException
 from flask_cors import CORS
 from sqlalchemy import select
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
 
 api = Blueprint('api', __name__)
 
@@ -24,61 +25,47 @@ def handle_hello():
     return jsonify(response_body), 200
 
 
-@api.route('/register', methods=["POST"])
-def register():
-    # extraemos info del body
+@api.route('/auth', methods=['POST'])
+def auth():
     body = request.get_json()
-    # verificamos informacion
+    print(body)
     if not body["email"] or not body["password"]:
-        return jsonify({"success": False, "data": "missing data"}), 403
-    # verificamos si el usuario existe en la base de datos
-    # <---esto hace:<sqlalchemy.engine.result.ChunkedIteratorResult object at 0x74aa4219e910> --> scalar_one_or_none() --> <User 1> or None
-    user = db.session.execute(select(User).where(
-        User.email == body["email"])).scalar_one_or_none()
-    if user:
-        return jsonify({"success": False, "data": "user already exists"}), 403
-    # si no existe el usuario, lo creamos
-    new_user = User(
-        email=body["email"],
-        password=body["password"],
-        is_active=True
-    )
-    db.session.add(new_user)
-    db.session.commit()
-
-    return jsonify({"success": True, "data": "user created, log in"}), 201
-
-
-@api.route('/login', methods=["POST"])
-def login():
-
-    # extraemos info del body
-    body = request.get_json()
-
-    # verificamos informacion
-    if not body["email"] or not body["password"]:
-        return jsonify({"success": False, "data": "missing data"}), 403 
+        return jsonify({"success": False, "data": "missing info"}), 403 
     
-    # verificamos si el usuario existe en la base de datos
-    user = db.session.execute(select(User).where(
-        User.email == body["email"])).scalar_one_or_none()# <---esto hace:<sqlalchemy.engine.result.ChunkedIteratorResult object at 0x74aa4219e910> --> scalar_one_or_none() --> <User 1> or None
+    user = db.session.execute(select(User).where(User.email == body["email"])).scalar_one_or_none()
+
+    if body['type'] == 'register':
+        if user: 
+            return jsonify({"success": False, "data": "email taken"}), 403 
+        print(body['password'])
+        hashed = generate_password_hash(body["password"]) #hasheamos contraseña
+        print('password despues del hash', hashed)
+        new_user = User(
+            email = body["email"],
+            password = hashed,
+            is_active = True
+        ) 
+        db.session.add(new_user)
+        db.session.commit()
+        token = create_access_token(identity=str(new_user.id))
+        return jsonify({"success": True, "data": new_user.serialize(), "token": token}), 201
     
+    if body["type"] == 'login':
+        if not user:
+           return jsonify({"success": False, "data": "email not found"}), 404  
+        #comparar contraseñas 
+        if not check_password_hash(user.password, body["password"]):
+            return jsonify({"success": False, "data": "email/password bad"}), 401  
+        token = create_access_token(identity=str(user.id))
+        return jsonify({"success": True, "data": user.serialize(), "token": token}), 200
+
+    return jsonify({"success": False, "data": "?????"}), 418  
+
+@api.route('/me', methods=["GET"])
+@jwt_required() #solo se puede acceder con el token
+def get_me():
+    id = get_jwt_identity() #extraemos del token la identidad (que es el id del usuario)
+    user = db.session.get(User,id)
     if not user:
-        return jsonify({"success": False, "data": "email not found"}), 404
-
-    if user.password != body["password"]:
-        return jsonify({"success": False, "data": "email/password wrong"}), 403
-
-    # generar el token y convertirmos el user.id a string
-
-    token = create_access_token(identity=str(user.id))
-
-    return jsonify({"succes": True, "token":token}), 201
-
-@api.route("/me", methods=["GET"])
-@jwt_required() #protegemos la ruta, sin token, no se pasa, al mas puro estilo Gandalf
-def get_user_info():
-    id = get_jwt_identity() #extraemos id del token
-    print('user id is -> ',id)
-    user = db.session.get(User, id) #usamos id para buscar la info en BD
-    return jsonify({"success": True, "data": user.serialize()}), 201 #devolvemos el serialize del user
+           return jsonify({"success": False, "data": "??que me has enviado???"}), 418 #--> I'm a teapot
+    return jsonify({"success": True, "data": user.serialize()})
